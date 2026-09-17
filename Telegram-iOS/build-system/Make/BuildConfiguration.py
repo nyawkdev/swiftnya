@@ -71,7 +71,6 @@ def build_configuration_from_json(path):
     with open(path) as file:
         configuration_dict = json.load(file)
         required_keys = [
-            'sg_config',
             'bundle_id',
             'api_id',
             'api_hash',
@@ -89,7 +88,7 @@ def build_configuration_from_json(path):
             if key not in configuration_dict:
                 print('Configuration at {} does not contain {}'.format(path, key))
         return BuildConfiguration(
-            sg_config=configuration_dict['sg_config'],
+            sg_config=configuration_dict.get('sg_config', ''),
             bundle_id=configuration_dict['bundle_id'],
             api_id=configuration_dict['api_id'],
             api_hash=configuration_dict['api_hash'],
