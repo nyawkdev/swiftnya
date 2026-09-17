@@ -113,36 +113,53 @@ jobs:
             --configurationPath="build-system/appstore-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
-            --buildNumber="$BUILD_NUMBER"
+            --buildNumber="$BUILD_NUMBER" \
+            --outputBuildArtifactsPath="build/artifacts"
           
-          # Сбор артефактов
           OUTPUT_PATH="build/artifacts"
-          rm -rf "$OUTPUT_PATH"
-          mkdir -p "$OUTPUT_PATH"
           
-          FOUND_IPA=$(find bazel-out -name "*.ipa" | head -n 1)
-          if [ -n "$FOUND_IPA" ]; then
-            cp "$FOUND_IPA" "$OUTPUT_PATH/Telegram.ipa"
-            echo "IPA успешно скопирован: $OUTPUT_PATH/Telegram.ipa"
-            ls -lh "$OUTPUT_PATH/Telegram.ipa"
-          else
-            echo "ОШИБКА: Файл .ipa не найден в bazel-out!"
-            find bazel-out -name "*Telegram*" | head -n 30
-            exit 1
+          # Проверяем артефакты от Make.py
+          if [ -f "$OUTPUT_PATH/Swiftgram.ipa" ]; then
+            cp "$OUTPUT_PATH/Swiftgram.ipa" "$OUTPUT_PATH/Telegram.ipa"
+            echo "Swiftgram.ipa успешно сформирован Make.py:"
+            ls -lh "$OUTPUT_PATH/Swiftgram.ipa"
           fi
           
-          # Сбор dSYM отладочных символов
-          mkdir -p build/DSYMs
-          find bazel-out -name "*.dSYM" -exec cp -R {} build/DSYMs/ \; 2>/dev/null || true
-          if [ -d "build/DSYMs" ] && [ "$(ls -A build/DSYMs)" ]; then
-            zip -r "$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null || true
+          if [ -f "$OUTPUT_PATH/Swiftgram.DSYMs.zip" ]; then
+            cp "$OUTPUT_PATH/Swiftgram.DSYMs.zip" "$OUTPUT_PATH/Telegram.DSYMs.zip"
+          fi
+
+          # Запасной поиск в bazel-bin и bazel-out, если Make.py не переместил
+          if [ ! -f "$OUTPUT_PATH/Telegram.ipa" ]; then
+            echo "Поиск .ipa в bazel-bin и bazel-out..."
+            FOUND_IPA=$(find bazel-bin bazel-out -name "*.ipa" 2>/dev/null | head -n 1)
+            if [ -n "$FOUND_IPA" ]; then
+              mkdir -p "$OUTPUT_PATH"
+              cp "$FOUND_IPA" "$OUTPUT_PATH/Telegram.ipa"
+              cp "$FOUND_IPA" "$OUTPUT_PATH/Swiftgram.ipa"
+              echo "IPA найден ($FOUND_IPA) и скопирован в $OUTPUT_PATH"
+              ls -lh "$OUTPUT_PATH/Telegram.ipa"
+            else
+              echo "ОШИБКА: Файл .ipa не найден в bazel-bin или bazel-out!"
+              find bazel-bin -name "*.app" -o -name "*.ipa" 2>/dev/null | head -n 30
+              exit 1
+            fi
+          fi
+          
+          # Сбор dSYM, если архив еще не создан
+          if [ ! -f "$OUTPUT_PATH/Telegram.DSYMs.zip" ]; then
+            mkdir -p build/DSYMs
+            find bazel-bin bazel-out -name "*.dSYM" -exec cp -R {} build/DSYMs/ \; 2>/dev/null || true
+            if [ -d "build/DSYMs" ] && [ "$(ls -A build/DSYMs)" ]; then
+              zip -r "$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null || true
+            fi
           fi
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Telegram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
-          path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
+          name: Swiftgram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          path: /Users/Shared/telegram-ios/build/artifacts/*.ipa
           if-no-files-found: error
           retention-days: 14
 
@@ -158,7 +175,7 @@ jobs:
             - Билд: ${{ env.BUILD_NUMBER }}
             - Собрано через GitHub Actions (macOS).
           files: |
-            /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
-            /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+            /Users/Shared/telegram-ios/build/artifacts/*.ipa
+            /Users/Shared/telegram-ios/build/artifacts/*.zip
           draft: false
           prerelease: false
