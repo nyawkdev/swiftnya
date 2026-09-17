@@ -15,7 +15,7 @@ on:
 jobs:
   build:
     name: Build .IPA (macOS Apple Silicon)
-    runs-on: macos-14
+    runs-on: macos-latest
     permissions:
       contents: write
 
@@ -30,6 +30,7 @@ jobs:
         run: |
           set -e
           echo "=== Определение и настройка версии Xcode ==="
+          ls -ld /Applications/Xcode* || true
           
           REQ_XCODE=""
           if [ -f "Telegram-iOS/versions.json" ]; then
@@ -41,19 +42,21 @@ jobs:
           if [ -n "$REQ_XCODE" ] && [ -d "/Applications/Xcode_${REQ_XCODE}.app" ]; then
             echo "Выбираем /Applications/Xcode_${REQ_XCODE}.app"
             sudo xcode-select -s "/Applications/Xcode_${REQ_XCODE}.app/Contents/Developer"
+          elif ls -d /Applications/Xcode_26*.app 1> /dev/null 2>&1; then
+            BEST_XCODE=$(ls -d /Applications/Xcode_26*.app | tail -n 1)
+            echo "Выбираем доступную версию Xcode 26: $BEST_XCODE"
+            sudo xcode-select -s "$BEST_XCODE/Contents/Developer"
           elif [ -d "/Applications/Xcode_16.2.app" ]; then
             echo "Выбираем /Applications/Xcode_16.2.app"
             sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
           elif [ -d "/Applications/Xcode_16.0.app" ]; then
             echo "Выбираем /Applications/Xcode_16.0.app"
             sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
-          elif [ -d "/Applications/Xcode_15.4.app" ]; then
-            echo "Выбираем /Applications/Xcode_15.4.app"
-            sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
           fi
           
-          echo "Активный путь Xcode:"
-          xcode-select -p
+          DEV_DIR="$(xcode-select -p)"
+          echo "Активный путь Xcode: $DEV_DIR"
+          echo "DEVELOPER_DIR=$DEV_DIR" >> $GITHUB_ENV
           xcodebuild -version
 
       - name: Prepare canonical source directory
