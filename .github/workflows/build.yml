@@ -1,0 +1,162 @@
+name: Build Telegram iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Создать GitHub Release с прикрепленным .ipa?'
+        required: true
+        type: boolean
+        default: true
+  # Раскомментируйте, если хотите запускать сборку автоматически при каждом пуше в main:
+  # push:
+  #   branches: [ main ]
+
+jobs:
+  build:
+    name: Build .IPA (macOS Apple Silicon)
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Xcode version
+        run: |
+          set -e
+          echo "=== Определение и настройка версии Xcode ==="
+          
+          REQ_XCODE=""
+          if [ -f "Telegram-iOS/versions.json" ]; then
+            REQ_XCODE=$(python3 -c 'import json; print(json.load(open("Telegram-iOS/versions.json")).get("xcode", ""))' 2>/dev/null || echo "")
+          fi
+          
+          echo "Требуемая версия из versions.json: $REQ_XCODE"
+          
+          if [ -n "$REQ_XCODE" ] && [ -d "/Applications/Xcode_${REQ_XCODE}.app" ]; then
+            echo "Выбираем /Applications/Xcode_${REQ_XCODE}.app"
+            sudo xcode-select -s "/Applications/Xcode_${REQ_XCODE}.app/Contents/Developer"
+          elif [ -d "/Applications/Xcode_16.2.app" ]; then
+            echo "Выбираем /Applications/Xcode_16.2.app"
+            sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_16.0.app" ]; then
+            echo "Выбираем /Applications/Xcode_16.0.app"
+            sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_15.4.app" ]; then
+            echo "Выбираем /Applications/Xcode_15.4.app"
+            sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+          fi
+          
+          echo "Активный путь Xcode:"
+          xcode-select -p
+          xcodebuild -version
+
+      - name: Prepare canonical source directory and submodules
+        run: |
+          set -e
+          set -x
+          
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+          sudo mkdir -p /Users/Shared
+          sudo rm -rf "$SOURCE_DIR"
+          
+          # Копируем код Telegram-iOS в каноническую директорию
+          cp -R "$GITHUB_WORKSPACE/Telegram-iOS" "$SOURCE_DIR"
+          cd "$SOURCE_DIR"
+          
+          # Инициализируем Git и подтягиваем точные сабмодули Swiftgram
+          git init
+          git remote add upstream https://github.com/Swiftgram/Telegram-iOS.git
+          git fetch --depth 1 upstream master
+          git reset --soft FETCH_HEAD
+          
+          echo "Выкачиваем сабмодули Telegram-iOS..."
+          git submodule update --init --recursive --jobs 8
+          
+          # Накладываем пользовательские изменения поверх
+          rsync -av --exclude='.git' "$GITHUB_WORKSPACE/Telegram-iOS/" "$SOURCE_DIR/"
+
+      - name: Build Telegram iOS (.ipa)
+        run: |
+          set -e
+          set -x
+          
+          SOURCE_DIR="/Users/Shared/telegram-ios"
+          BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
+          
+          cd "$SOURCE_DIR"
+          
+          BUILD_NUMBER_OFFSET="$(cat build_number_offset 2>/dev/null || echo 3730)"
+          APP_VERSION="$(python3 -c 'import json; print(json.load(open("versions.json"))["app"])' 2>/dev/null || echo "1.0.0")"
+          COMMIT_COUNT="$(git rev-list --count HEAD 2>/dev/null || echo 100)"
+          BUILD_NUMBER="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
+          
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+          
+          echo "Сборка приложения: версия $APP_VERSION, номер сборки $BUILD_NUMBER"
+          
+          # Импорт фейковых сертификатов кодоподписи
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          
+          # Компиляция через Bazel
+          python3 -u build-system/Make/Make.py \
+            --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --overrideXcodeVersion \
+            build \
+            --configurationPath="build-system/appstore-configuration.json" \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --configuration=release_arm64 \
+            --buildNumber="$BUILD_NUMBER"
+          
+          # Сбор артефактов
+          OUTPUT_PATH="build/artifacts"
+          rm -rf "$OUTPUT_PATH"
+          mkdir -p "$OUTPUT_PATH"
+          
+          FOUND_IPA=$(find bazel-out -name "*.ipa" | head -n 1)
+          if [ -n "$FOUND_IPA" ]; then
+            cp "$FOUND_IPA" "$OUTPUT_PATH/Telegram.ipa"
+            echo "IPA успешно скопирован: $OUTPUT_PATH/Telegram.ipa"
+            ls -lh "$OUTPUT_PATH/Telegram.ipa"
+          else
+            echo "ОШИБКА: Файл .ipa не найден в bazel-out!"
+            find bazel-out -name "*Telegram*" | head -n 30
+            exit 1
+          fi
+          
+          # Сбор dSYM отладочных символов
+          mkdir -p build/DSYMs
+          find bazel-out -name "*.dSYM" -exec cp -R {} build/DSYMs/ \; 2>/dev/null || true
+          if [ -d "build/DSYMs" ] && [ "$(ls -A build/DSYMs)" ]; then
+            zip -r "$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null || true
+          fi
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telegram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create GitHub Release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.create_release == true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          name: Swiftgram v${{ env.APP_VERSION }} (Сборка ${{ env.BUILD_NUMBER }})
+          body: |
+            Автоматическая сборка приложения Telegram iOS (Swiftgram).
+            - Версия: ${{ env.APP_VERSION }}
+            - Билд: ${{ env.BUILD_NUMBER }}
+            - Собрано через GitHub Actions (macOS).
+          files: |
+            /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
+            /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+          draft: false
+          prerelease: false
