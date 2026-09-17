@@ -76,6 +76,12 @@ jobs:
             echo "ОШИБКА: rules_xcodeproj/MODULE.bazel не найден!"
             exit 1
           fi
+          
+          # Патчим rules_apple, чтобы проверки Xcode 26 не блокировали Xcode 16 на раннере
+          if [ -f "$SOURCE_DIR/build-system/bazel-rules/rules_apple/apple/internal/resource_actions/actool.bzl" ]; then
+            sed -i '' 's/"26.0"/"16.0"/g' "$SOURCE_DIR/build-system/bazel-rules/rules_apple/apple/internal/resource_actions/actool.bzl" || true
+          fi
+          
           echo "Сабмодули успешно подготовлены в $SOURCE_DIR"
 
       - name: Build Telegram iOS (.ipa)
