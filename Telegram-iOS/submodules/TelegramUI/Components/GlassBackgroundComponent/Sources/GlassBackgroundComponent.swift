@@ -422,17 +422,28 @@ public class GlassBackgroundView: UIView {
                 transition.setCornerRadius(layer: self.view.layer, cornerRadius: cornerRadius)
             case let .customRoundedRect(cornerRadii):
                 transition.setCornerRadius(layer: self.view.layer, cornerRadius: 0.0)
-                let maskLayer: CAShapeLayer
-                if let current = self.maskLayer {
-                    maskLayer = current
+                if #available(iOS 26.0, *) {
+                    transition.animateView {
+                        self.view.cornerConfiguration = .corners(
+                            topLeftRadius: .fixed(cornerRadii.topLeft),
+                            topRightRadius: .fixed(cornerRadii.topRight),
+                            bottomLeftRadius: .fixed(cornerRadii.bottomLeft),
+                            bottomRightRadius: .fixed(cornerRadii.bottomRight)
+                        )
+                    }
                 } else {
-                    maskLayer = CAShapeLayer()
-                    maskLayer.fillColor = UIColor.black.cgColor
-                    self.maskLayer = maskLayer
-                    self.view.layer.mask = maskLayer
+                    let maskLayer: CAShapeLayer
+                    if let current = self.maskLayer {
+                        maskLayer = current
+                    } else {
+                        maskLayer = CAShapeLayer()
+                        maskLayer.fillColor = UIColor.black.cgColor
+                        self.maskLayer = maskLayer
+                        self.view.layer.mask = maskLayer
+                    }
+                    transition.setFrame(layer: maskLayer, frame: CGRect(origin: CGPoint(), size: size))
+                    transition.setShapeLayerPath(layer: maskLayer, path: GlassBackgroundView.generateRoundedRectPath(size: size, cornerRadii: cornerRadii))
                 }
-                transition.setFrame(layer: maskLayer, frame: CGRect(origin: CGPoint(), size: size))
-                transition.setShapeLayerPath(layer: maskLayer, path: GlassBackgroundView.generateRoundedRectPath(size: size, cornerRadii: cornerRadii))
             }
         }
     }
@@ -484,18 +495,38 @@ public class GlassBackgroundView: UIView {
     public static var useCustomGlassImpl: Bool = false
     
     public override init(frame: CGRect) {
-        self.legacyView = LegacyGlassView(frame: CGRect())
-        let legacyHighlightContainerView = UIView()
-        legacyHighlightContainerView.isUserInteractionEnabled = false
-        legacyHighlightContainerView.clipsToBounds = true
-        self.legacyHighlightContainerView = legacyHighlightContainerView
-        self.legacyHighlightClippingContext = ClippingShapeContext(view: legacyHighlightContainerView)
-        self.nativeView = nil
-        self.nativeViewClippingContext = nil
-        self.nativeParamsView = nil
-        self.foregroundView = UIImageView()
-        
-        self.shadowView = UIImageView()
+        if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
+            self.legacyView = nil
+            self.legacyHighlightContainerView = nil
+            self.legacyHighlightClippingContext = nil
+            
+            let glassEffect = UIGlassEffect(style: .regular)
+            glassEffect.isInteractive = false
+            let nativeView = UIVisualEffectView(effect: glassEffect)
+            self.nativeViewClippingContext = ClippingShapeContext(view: nativeView)
+            self.nativeView = nativeView
+            
+            let nativeParamsView = EffectSettingsContainerView(frame: CGRect())
+            self.nativeParamsView = nativeParamsView
+            
+            nativeParamsView.addSubview(nativeView)
+            
+            self.foregroundView = nil
+            self.shadowView = nil
+        } else {
+            self.legacyView = LegacyGlassView(frame: CGRect())
+            let legacyHighlightContainerView = UIView()
+            legacyHighlightContainerView.isUserInteractionEnabled = false
+            legacyHighlightContainerView.clipsToBounds = true
+            self.legacyHighlightContainerView = legacyHighlightContainerView
+            self.legacyHighlightClippingContext = ClippingShapeContext(view: legacyHighlightContainerView)
+            self.nativeView = nil
+            self.nativeViewClippingContext = nil
+            self.nativeParamsView = nil
+            self.foregroundView = UIImageView()
+            
+            self.shadowView = UIImageView()
+        }
         
         self.maskContainerView = UIView()
         self.maskContainerView.backgroundColor = .white
@@ -707,7 +738,6 @@ public class GlassBackgroundView: UIView {
                 #endif
                 transition.setAlpha(view: foregroundView, alpha: isVisible ? 1.0 : 0.0)
             } else {
-                #if false
                 if let nativeParamsView = self.nativeParamsView, let nativeView = self.nativeView {
                     if #available(iOS 26.0, *) {
                         var glassEffect: UIGlassEffect?
@@ -725,7 +755,7 @@ public class GlassBackgroundView: UIView {
                                 }
                             case let .custom(style, color):
                                 switch style {
-                                 case .default:
+                                case .default:
                                     glassEffectValue = UIGlassEffect(style: .regular)
                                     glassEffectValue.tintColor = color
                                 case .clear:
@@ -786,7 +816,6 @@ public class GlassBackgroundView: UIView {
                         }
                     }
                 }
-                #endif
             }
         }
         
@@ -826,9 +855,22 @@ public final class GlassBackgroundContainerView: UIView {
     }
     
     public init(spacing: CGFloat = 7.0) {
-        self.nativeView = nil
-        self.nativeParamsView = nil
-        self.legacyView = ContentView()
+        if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
+            let effect = UIGlassContainerEffect()
+            effect.spacing = spacing
+            let nativeView = UIVisualEffectView(effect: effect)
+            self.nativeView = nativeView
+            
+            let nativeParamsView = EffectSettingsContainerView(frame: CGRect())
+            self.nativeParamsView = nativeParamsView
+            nativeParamsView.addSubview(nativeView)
+            
+            self.legacyView = nil
+        } else {
+            self.nativeView = nil
+            self.nativeParamsView = nil
+            self.legacyView = ContentView()
+        }
         
         super.init(frame: CGRect())
         
@@ -1638,7 +1680,7 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
                 tintColor: normalParams.tintColor,
                 isInteractive: normalParams.isInteractive,
                 isVisible: normalParams.isVisible,
-                transition: mappedTransition
+                transition: mappedTransition,
             )
         case let .extracted(size, cornerRadius, extractionState):
             switch extractionState {

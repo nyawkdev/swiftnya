@@ -520,7 +520,6 @@ public final class SharedWakeupManager {
     }
     
     private func startBackgroundProcessingTaskIfNeeded() {
-        #if false
         guard #available(iOS 26.0, *) else {
             return
         }
@@ -694,11 +693,9 @@ public final class SharedWakeupManager {
         } catch let e {
             Logger.shared.log("Wakeup", "BGTaskScheduler submit error: \(e)")
         }
-        #endif
     }
     
     private func startBackgroundStoryProcessingTaskIfNeeded() {
-        #if false
         guard #available(iOS 26.0, *) else {
             return
         }
@@ -891,7 +888,6 @@ public final class SharedWakeupManager {
         } catch let e {
             Logger.shared.log("Wakeup", "Story BGTaskScheduler submit error: \(e)")
         }
-        #endif
     }
     
     func allowBackgroundTimeExtension(timeout: Double, extendNow: Bool = false) {
