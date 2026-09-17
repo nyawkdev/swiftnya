@@ -20,10 +20,11 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository and submodules
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Configure Xcode version
         run: |
@@ -55,30 +56,27 @@ jobs:
           xcode-select -p
           xcodebuild -version
 
-      - name: Prepare canonical source directory and submodules
+      - name: Prepare canonical source directory
         run: |
           set -e
           set -x
+          
+          # Убеждаемся, что все сабмодули выкачаны
+          git submodule update --init --recursive --jobs 8
           
           SOURCE_DIR="/Users/Shared/telegram-ios"
           sudo mkdir -p /Users/Shared
           sudo rm -rf "$SOURCE_DIR"
           
-          # Копируем код Telegram-iOS в каноническую директорию
+          # Копируем Telegram-iOS со всеми сабмодулями в каноническую директорию
           cp -R "$GITHUB_WORKSPACE/Telegram-iOS" "$SOURCE_DIR"
-          cd "$SOURCE_DIR"
           
-          # Инициализируем Git и подтягиваем точные сабмодули Swiftgram
-          git init
-          git remote add upstream https://github.com/Swiftgram/Telegram-iOS.git
-          git fetch --depth 1 upstream master
-          git reset --soft FETCH_HEAD
-          
-          echo "Выкачиваем сабмодули Telegram-iOS..."
-          git submodule update --init --recursive --jobs 8
-          
-          # Накладываем пользовательские изменения поверх
-          rsync -av --exclude='.git' "$GITHUB_WORKSPACE/Telegram-iOS/" "$SOURCE_DIR/"
+          # Проверяем ключевые сабмодули Bazel
+          if [ ! -f "$SOURCE_DIR/build-system/bazel-rules/rules_xcodeproj/MODULE.bazel" ]; then
+            echo "ОШИБКА: rules_xcodeproj/MODULE.bazel не найден!"
+            exit 1
+          fi
+          echo "Сабмодули успешно подготовлены в $SOURCE_DIR"
 
       - name: Build Telegram iOS (.ipa)
         run: |
@@ -92,7 +90,7 @@ jobs:
           
           BUILD_NUMBER_OFFSET="$(cat build_number_offset 2>/dev/null || echo 3730)"
           APP_VERSION="$(python3 -c 'import json; print(json.load(open("versions.json"))["app"])' 2>/dev/null || echo "1.0.0")"
-          COMMIT_COUNT="$(git rev-list --count HEAD 2>/dev/null || echo 100)"
+          COMMIT_COUNT="$(git -C "$GITHUB_WORKSPACE" rev-list --count HEAD 2>/dev/null || echo 100)"
           BUILD_NUMBER="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
           
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
