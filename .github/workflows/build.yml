@@ -116,7 +116,7 @@ jobs:
             --buildNumber="$BUILD_NUMBER" \
             --outputBuildArtifactsPath="build/artifacts"
           
-          OUTPUT_PATH="build/artifacts"
+          OUTPUT_PATH="$SOURCE_DIR/build/artifacts"
           
           # Проверяем артефакты от Make.py
           if [ -f "$OUTPUT_PATH/Swiftgram.ipa" ]; then
@@ -155,6 +155,13 @@ jobs:
             fi
           fi
 
+      - name: Prepare Sideload IPA (without extensions)
+        run: |
+          set -e
+          set -x
+          
+          OUTPUT_PATH="/Users/Shared/telegram-ios/build/artifacts"
+          
           echo "=== Создание версии для Sideloading (SideStore / LiveContainer / AltStore) ==="
           # Удаляем расширения (PlugIns) и Watch, чтобы:
           # 1. Устранить ошибку SideStore "Mismatched bundle IDs" (IXErrorDomain Code=8)
@@ -177,11 +184,12 @@ jobs:
           ls -lh "$OUTPUT_PATH"/*Sideload*.ipa
 
       - name: Upload IPA Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Swiftgram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
           path: /Users/Shared/telegram-ios/build/artifacts/*.ipa
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Create GitHub Release
