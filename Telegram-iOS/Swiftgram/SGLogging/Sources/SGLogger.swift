@@ -44,9 +44,14 @@ public class SGLogger {
             }
             let appGroupName = "group.\(baseAppBundleId)"
             let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
-            guard let appGroupUrl = maybeAppGroupUrl else {
-                print("Can't setup logger (2)!")
-                return SGLogger(rootPath: "", basePath: "")
+            let appGroupUrl: URL
+            if let maybeAppGroupUrl = maybeAppGroupUrl {
+                appGroupUrl = maybeAppGroupUrl
+            } else {
+                let documentsUrl = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let fallbackGroupUrl = documentsUrl.appendingPathComponent("AppGroup")
+                let _ = try? FileManager.default.createDirectory(at: fallbackGroupUrl, withIntermediateDirectories: true, attributes: nil)
+                appGroupUrl = fallbackGroupUrl
             }
             let newRootPath = rootPathForBasePath(appGroupUrl.path)
             let newLogsPath = newRootPath + sgLogsPath
