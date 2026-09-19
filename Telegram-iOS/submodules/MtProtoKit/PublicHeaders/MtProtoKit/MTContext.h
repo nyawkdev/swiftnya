@@ -154,6 +154,7 @@
 - (void)reportProblemsWithDatacenterAddressForId:(NSInteger)datacenterId address:(MTDatacenterAddress * _Nonnull)address;
     
 - (void)updateApiEnvironment:(MTApiEnvironment * _Nullable (^ _Nonnull)(MTApiEnvironment * _Nullable))f;
+- (void)updateApiEnvironment:(MTApiEnvironment * _Nullable (^ _Nonnull)(MTApiEnvironment * _Nullable))f completion:(dispatch_block_t _Nullable)completion;
 
 - (void)beginExplicitBackupAddressDiscovery;
 

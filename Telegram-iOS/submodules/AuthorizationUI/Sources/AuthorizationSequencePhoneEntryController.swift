@@ -202,6 +202,9 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             self.controllerNode.updateCountryCode()
         }
         
+        if #available(iOS 16.0, *) {
+            self.controllerNode.updateDisplayPasskeyLoginOption()
+        }
         self.loadAndPresentPasskey(force: false)
     }
     
@@ -224,28 +227,59 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                 let engine = TelegramEngineUnauthorized(account: account)
                 let passkeyDataString = await engine.auth.requestPasskeyLoginData(apiId: self.apiId, apiHash: self.apiHash).get()
                 guard let passkeyDataString, let passkeyData = passkeyDataString.data(using: .utf8) else {
+                    self.controllerNode.updateDisplayPasskeyLoginOption()
+                    if let validLayout = self.validLayout {
+                        self.containerLayoutUpdated(validLayout, transition: .immediate)
+                    }
                     return
                 }
                 guard let params = try? JSONSerialization.jsonObject(with: passkeyData) as? [String: Any] else {
+                    self.controllerNode.updateDisplayPasskeyLoginOption()
+                    if let validLayout = self.validLayout {
+                        self.containerLayoutUpdated(validLayout, transition: .immediate)
+                    }
                     return
                 }
                 guard let pkDict = params["publicKey"] as? [String: Any] else {
-                    return
-                }
-                /* MARK: Swiftgram
-                guard let relyingPartyIdentifier = pkDict["rpId"] as? String else {
-                    return
-                }*/
-                guard let challengeBase64 = pkDict["challenge"] as? String else {
-                    return
-                }
-                guard let challengeData = decodeBase64(challengeBase64) else {
+                    self.controllerNode.updateDisplayPasskeyLoginOption()
+                    if let validLayout = self.validLayout {
+                        self.containerLayoutUpdated(validLayout, transition: .immediate)
+                    }
                     return
                 }
                 
-                let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "swiftgram.app")
-                let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challengeData)
-                let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
+                guard let challengeBase64 = pkDict["challenge"] as? String else {
+                    self.controllerNode.updateDisplayPasskeyLoginOption()
+                    if let validLayout = self.validLayout {
+                        self.containerLayoutUpdated(validLayout, transition: .immediate)
+                    }
+                    return
+                }
+                guard let challengeData = decodeBase64(challengeBase64) else {
+                    self.controllerNode.updateDisplayPasskeyLoginOption()
+                    if let validLayout = self.validLayout {
+                        self.containerLayoutUpdated(validLayout, transition: .immediate)
+                    }
+                    return
+                }
+                
+                let serverRpId = pkDict["rpId"] as? String
+                var rpIds: [String] = []
+                if let serverRpId, !serverRpId.isEmpty {
+                    rpIds.append(serverRpId)
+                }
+                for candidate in ["telegram.org", "swiftgram.app"] {
+                    if !rpIds.contains(candidate) {
+                        rpIds.append(candidate)
+                    }
+                }
+                
+                let requests: [ASAuthorizationRequest] = rpIds.map { rpId in
+                    let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
+                    return platformProvider.createCredentialAssertionRequest(challenge: challengeData)
+                }
+                
+                let authController = ASAuthorizationController(authorizationRequests: requests)
                 authController.delegate = self
                 authController.presentationContextProvider = self
                 if force {
@@ -307,11 +341,9 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     }
 
     public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: any Error) {
-        if (error as NSError).domain == "com.apple.AuthenticationServices.AuthorizationError" && (error as NSError).code == 1001 {
-            self.controllerNode.updateDisplayPasskeyLoginOption()
-            if let validLayout = self.validLayout {
-                self.containerLayoutUpdated(validLayout, transition: .immediate)
-            }
+        self.controllerNode.updateDisplayPasskeyLoginOption()
+        if let validLayout = self.validLayout {
+            self.containerLayoutUpdated(validLayout, transition: .immediate)
         }
     }
     
@@ -347,7 +379,68 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         self.presentApiCredentialsAlert()
     }
     
-    private func presentApiCredentialsAlert(completion: (() -> Void)? = nil) {
+    private func sanitizeAndValidateApiCredentials(idString: String, hashString: String) -> (apiId: Int32, apiHash: String, error: String?) {
+        var cleanId = idString.trimmingCharacters(in: .whitespacesAndNewlines)
+        for ch in ["\"", "'", "«", "»", " ", "\u{00A0}", "\t"] {
+            cleanId = cleanId.replacingOccurrences(of: ch, with: "")
+        }
+        
+        var cleanHash = hashString.trimmingCharacters(in: .whitespacesAndNewlines)
+        for ch in ["\"", "'", "«", "»", " ", "\u{00A0}", "\t"] {
+            cleanHash = cleanHash.replacingOccurrences(of: ch, with: "")
+        }
+        cleanHash = cleanHash.lowercased()
+        
+        let isRussian = self.presentationData.strings.baseLanguageCode.hasPrefix("ru")
+        
+        guard !cleanId.isEmpty else {
+            let msg = isRussian ? "Поле App api_id не должно быть пустым." : "App api_id cannot be empty."
+            return (0, "", msg)
+        }
+        
+        guard CharacterSet.decimalDigits.isSuperset(of: CharacterSet(charactersIn: cleanId)) else {
+            let msg = isRussian ? "App api_id должен содержать только цифры (например: 20401234)." : "App api_id must contain digits only (e.g. 20401234)."
+            return (0, "", msg)
+        }
+        
+        guard let parsedId = Int32(cleanId), parsedId > 0 else {
+            let msg = isRussian ? "Некорректное значение App api_id (слишком большое число или меньше нуля)." : "Invalid App api_id value."
+            return (0, "", msg)
+        }
+        
+        guard !cleanHash.isEmpty else {
+            let msg = isRussian ? "Поле App api_hash не должно быть пустым." : "App api_hash cannot be empty."
+            return (0, "", msg)
+        }
+        
+        let hexCharacterSet = CharacterSet(charactersIn: "0123456789abcdef")
+        guard cleanHash.count == 32 && hexCharacterSet.isSuperset(of: CharacterSet(charactersIn: cleanHash)) else {
+            let msg = isRussian ? "App api_hash должен состоять ровно из 32 шестнадцатеричных символов (0-9, a-f)." : "App api_hash must be exactly 32 hex characters (0-9, a-f)."
+            return (0, "", msg)
+        }
+        
+        return (parsedId, cleanHash, nil)
+    }
+    
+    private func resetToDefaultApiCredentials(completion: (() -> Void)? = nil) {
+        UserDefaults.standard.removeObject(forKey: "custom_telegram_api_id")
+        UserDefaults.standard.removeObject(forKey: "custom_telegram_api_hash")
+        UserDefaults.standard.set(true, forKey: "custom_telegram_api_prompted")
+        UserDefaults.standard.synchronize()
+        
+        let defaultId: Int32 = 8
+        let defaultHash = "7245de8e747a0d6fbe11f7cc14fcc0bb"
+        self.apiId = defaultId
+        self.apiHash = defaultHash
+        self.account?.updateApiCredentials(apiId: defaultId, apiHash: defaultHash, completion: {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                completion?()
+            }
+        })
+        self.loadAndPresentPasskey(force: false)
+    }
+
+    private func presentApiCredentialsAlert(initialId: String? = nil, initialHash: String? = nil, completion: (() -> Void)? = nil) {
         let currentApiId = UserDefaults.standard.integer(forKey: "custom_telegram_api_id")
         let currentApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
         
@@ -360,7 +453,9 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         alert.addTextField { textField in
             textField.placeholder = "App api_id (например: 12345678)"
             textField.keyboardType = .numberPad
-            if currentApiId > 0 {
+            if let initialId = initialId {
+                textField.text = initialId
+            } else if currentApiId > 0 {
                 textField.text = "\(currentApiId)"
             }
         }
@@ -369,33 +464,50 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             textField.placeholder = "App api_hash"
             textField.autocapitalizationType = .none
             textField.autocorrectionType = .no
-            if !currentApiHash.isEmpty {
+            if let initialHash = initialHash {
+                textField.text = initialHash
+            } else if !currentApiHash.isEmpty {
                 textField.text = currentApiHash
             }
         }
         
         let saveTitle = isRussian ? "Сохранить" : "Save"
-        alert.addAction(UIAlertAction(title: saveTitle, style: .default, handler: { _ in
-            let idText = alert.textFields?[0].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let hashText = alert.textFields?[1].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        alert.addAction(UIAlertAction(title: saveTitle, style: .default, handler: { [weak self] _ in
+            guard let strongSelf = self else { return }
+            let idText = alert.textFields?[0].text ?? ""
+            let hashText = alert.textFields?[1].text ?? ""
             
-            if let newId = Int32(idText), newId > 0, !hashText.isEmpty {
-                UserDefaults.standard.set(Int(newId), forKey: "custom_telegram_api_id")
-                UserDefaults.standard.set(hashText, forKey: "custom_telegram_api_hash")
-            } else {
-                UserDefaults.standard.removeObject(forKey: "custom_telegram_api_id")
-                UserDefaults.standard.removeObject(forKey: "custom_telegram_api_hash")
+            let (parsedId, cleanHash, validationError) = strongSelf.sanitizeAndValidateApiCredentials(idString: idText, hashString: hashText)
+            if let validationError = validationError {
+                let errorAlert = UIAlertController(title: isRussian ? "Ошибка валидации" : "Validation Error", message: validationError, preferredStyle: .alert)
+                errorAlert.addAction(UIAlertAction(title: isRussian ? "Исправить" : "Fix", style: .default, handler: { [weak strongSelf] _ in
+                    strongSelf?.presentApiCredentialsAlert(initialId: idText, initialHash: hashText, completion: completion)
+                }))
+                errorAlert.addAction(UIAlertAction(title: isRussian ? "По умолчанию" : "Use Default", style: .destructive, handler: { [weak strongSelf] _ in
+                    strongSelf?.resetToDefaultApiCredentials(completion: completion)
+                }))
+                strongSelf.present(errorAlert, animated: true, completion: nil)
+                return
             }
+            
+            UserDefaults.standard.set(Int(parsedId), forKey: "custom_telegram_api_id")
+            UserDefaults.standard.set(cleanHash, forKey: "custom_telegram_api_hash")
             UserDefaults.standard.set(true, forKey: "custom_telegram_api_prompted")
             UserDefaults.standard.synchronize()
-            completion?()
+            
+            strongSelf.apiId = parsedId
+            strongSelf.apiHash = cleanHash
+            strongSelf.account?.updateApiCredentials(apiId: parsedId, apiHash: cleanHash, completion: {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    completion?()
+                }
+            })
+            strongSelf.loadAndPresentPasskey(force: false)
         }))
         
         let defaultTitle = isRussian ? "По умолчанию" : "Use Default"
-        alert.addAction(UIAlertAction(title: defaultTitle, style: .cancel, handler: { _ in
-            UserDefaults.standard.set(true, forKey: "custom_telegram_api_prompted")
-            UserDefaults.standard.synchronize()
-            completion?()
+        alert.addAction(UIAlertAction(title: defaultTitle, style: .cancel, handler: { [weak self] _ in
+            self?.resetToDefaultApiCredentials(completion: completion)
         }))
         
         self.present(alert, animated: true, completion: nil)

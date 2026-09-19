@@ -175,7 +175,13 @@ API_AVAILABLE(ios(10))
 - (NSString * _Nonnull)apiHash {
     NSString *customHash = [[NSUserDefaults standardUserDefaults] stringForKey:@"custom_telegram_api_hash"];
     if (customHash != nil && customHash.length > 0) {
-        return customHash;
+        NSString *trimmed = [customHash stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        trimmed = [trimmed stringByReplacingOccurrencesOfString:@"\"" withString:@""];
+        trimmed = [trimmed stringByReplacingOccurrencesOfString:@"'" withString:@""];
+        trimmed = [trimmed lowercaseString];
+        if (trimmed.length == 32) {
+            return trimmed;
+        }
     }
     return _apiHash;
 }

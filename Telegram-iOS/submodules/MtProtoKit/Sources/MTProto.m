@@ -2816,6 +2816,7 @@ static bool isDataEqualToDataConstTime(NSData *data1, NSData *data2) {
     
 - (void)contextApiEnvironmentUpdated:(MTContext *)context apiEnvironment:(MTApiEnvironment *)apiEnvironment {
     [[MTProto managerQueue] dispatchOnQueue:^{
+        int32_t previousApiId = _apiEnvironment.apiId;
         NSString *previousLangPackCode = _apiEnvironment.langPackCode;
         MTSocksProxySettings *previousSocksProxySettings = _apiEnvironment.socksProxySettings;
         
@@ -2828,6 +2829,10 @@ static bool isDataEqualToDataConstTime(NSData *data1, NSData *data2) {
         }
         
         if (![_apiEnvironment.langPackCode isEqualToString:previousLangPackCode]) {
+            resetConnection = true;
+        }
+        
+        if (_apiEnvironment.apiId != previousApiId) {
             resetConnection = true;
         }
         

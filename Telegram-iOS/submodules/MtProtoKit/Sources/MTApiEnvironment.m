@@ -410,6 +410,11 @@ NSString *suffix = @"";
     _apiInitializationHash = [[NSString alloc] initWithFormat:@"apiId=%" PRId32 "&deviceModel=%@&systemVersion=%@&appVersion=%@&langCode=%@&layer=%@&langPack=%@&langPackCode=%@&proxy=%@&systemCode=%@", _apiId, _deviceModel, _systemVersion, _appVersion, _systemLangCode, _layer, _langPack, _langPackCode, _socksProxySettings, _systemCode];
 }
 
+- (void)setApiId:(int32_t)apiId {
+    _apiId = apiId;
+    [self _updateApiInitializationHash];
+}
+
 - (void)setLayer:(NSNumber *)layer {
     _layer = layer;
     
@@ -903,6 +908,30 @@ NSString *suffix = @"";
     result->_socksProxySettings = self.socksProxySettings;
     result->_networkSettings = self.networkSettings;
     result->_systemCode = systemCode;
+    
+    result.disableUpdates = self.disableUpdates;
+    result.tcpPayloadPrefix = self.tcpPayloadPrefix;
+    result.datacenterAddressOverrides = self.datacenterAddressOverrides;
+    result.accessHostOverride = self.accessHostOverride;
+    
+    [result _updateApiInitializationHash];
+    
+    return result;
+}
+
+- (MTApiEnvironment *)withUpdatedApiId:(int32_t)apiId {
+    MTApiEnvironment *result = [[MTApiEnvironment alloc] initWithDeviceModelName:_deviceModelName];
+    
+    result.apiId = apiId;
+    result.appVersion = self.appVersion;
+    result.layer = self.layer;
+    
+    result.langPack = self.langPack;
+    
+    result->_langPackCode = self.langPackCode;
+    result->_socksProxySettings = self.socksProxySettings;
+    result->_networkSettings = self.networkSettings;
+    result->_systemCode = self.systemCode;
     
     result.disableUpdates = self.disableUpdates;
     result.tcpPayloadPrefix = self.tcpPayloadPrefix;

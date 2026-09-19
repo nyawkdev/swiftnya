@@ -179,7 +179,16 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
         if let currentController = currentController {
             controller = currentController
         } else {
-            controller = AuthorizationSequencePhoneEntryController(sharedContext: self.sharedContext, account: self.account, apiId: self.apiId, apiHash: self.apiHash, isTestingEnvironment: self.account.testingEnvironment, otherAccountPhoneNumbers: self.otherAccountPhoneNumbers, network: self.account.network, presentationData: self.presentationData, openUrl: { [weak self] url in
+            let customApiId = Int32(UserDefaults.standard.integer(forKey: "custom_telegram_api_id"))
+            let customApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
+            let effectiveApiId = customApiId > 0 ? customApiId : self.apiId
+            let effectiveApiHash = !customApiHash.isEmpty ? customApiHash : self.apiHash
+            if customApiId > 0 && !customApiHash.isEmpty {
+                self.apiId = customApiId
+                self.apiHash = customApiHash
+                self.account.updateApiCredentials(apiId: customApiId, apiHash: customApiHash)
+            }
+            controller = AuthorizationSequencePhoneEntryController(sharedContext: self.sharedContext, account: self.account, apiId: effectiveApiId, apiHash: effectiveApiHash, isTestingEnvironment: self.account.testingEnvironment, otherAccountPhoneNumbers: self.otherAccountPhoneNumbers, network: self.account.network, presentationData: self.presentationData, openUrl: { [weak self] url in
                 self?.openUrl(url)
             }, back: { [weak self] in
                 guard let strongSelf = self else {
@@ -201,6 +210,11 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     return
                 }
                 strongSelf.account = updatedAccount
+                let customApiId = Int32(UserDefaults.standard.integer(forKey: "custom_telegram_api_id"))
+                let customApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
+                if customApiId > 0 && !customApiHash.isEmpty {
+                    strongSelf.account.updateApiCredentials(apiId: customApiId, apiHash: customApiHash)
+                }
                 strongSelf.inAppPurchaseManager = InAppPurchaseManager(engine: .unauthorized(strongSelf.engine))
             }
             controller.loginWithNumber = { [weak self, weak controller] number, syncContacts in
@@ -221,6 +235,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                         if customApiId > 0 && !customApiHash.isEmpty {
                             strongSelf.apiId = customApiId
                             strongSelf.apiHash = customApiHash
+                            strongSelf.account.updateApiCredentials(apiId: customApiId, apiHash: customApiHash)
                         }
                         strongSelf.actionDisposable.set((sendAuthorizationCode(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, phoneNumber: number, apiId: strongSelf.apiId, apiHash: strongSelf.apiHash, pushNotificationConfiguration: authorizationPushConfiguration, firebaseSecretStream: strongSelf.sharedContext.firebaseSecretStream, syncContacts: syncContacts, disableAuthTokens: disableAuthTokens, forcedPasswordSetupNotice: { value in
                             guard let entry = EngineCodableEntry(ApplicationSpecificCounterNotice(value: value)) else {
@@ -333,6 +348,14 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
             controller.loginWithPasskey = { [weak self, weak controller] passkey, syncContacts in
                 guard let self else {
                     return
+                }
+                
+                let customApiId = Int32(UserDefaults.standard.integer(forKey: "custom_telegram_api_id"))
+                let customApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
+                if customApiId > 0 && !customApiHash.isEmpty {
+                    self.apiId = customApiId
+                    self.apiHash = customApiHash
+                    self.account.updateApiCredentials(apiId: customApiId, apiHash: customApiHash)
                 }
                 
                 self.actionDisposable.set((authorizeWithPasskey(

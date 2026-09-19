@@ -461,6 +461,25 @@ public struct NetworkInitializationArguments {
         self.useBetaFeatures = useBetaFeatures
         self.isICloudEnabled = isICloudEnabled
     }
+    
+    public func withUpdatedApi(apiId: Int32, apiHash: String) -> NetworkInitializationArguments {
+        return NetworkInitializationArguments(
+            apiId: apiId,
+            apiHash: apiHash,
+            languagesCategory: self.languagesCategory,
+            appVersion: self.appVersion,
+            voipMaxLayer: self.voipMaxLayer,
+            voipVersions: self.voipVersions,
+            appData: self.appData,
+            externalRequestVerificationStream: self.externalRequestVerificationStream,
+            externalRecaptchaRequestVerification: self.externalRecaptchaRequestVerification,
+            autolockDeadine: self.autolockDeadine,
+            encryptionProvider: self.encryptionProvider,
+            deviceModelName: self.deviceModelName,
+            useBetaFeatures: self.useBetaFeatures,
+            isICloudEnabled: self.isICloudEnabled
+        )
+    }
 }
 #if os(iOS)
 private let cloudDataContext = Atomic<CloudDataContext?>(value: nil)
@@ -844,6 +863,18 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     
     public func dropConnectionStatus() {
         _connectionStatus.set(.single(.waitingForNetwork))
+    }
+    
+    public func updateApiId(_ apiId: Int32, completion: (() -> Void)? = nil) {
+        self.context.updateApiEnvironment({ environment in
+            guard let environment = environment else {
+                return nil
+            }
+            if environment.apiId == apiId {
+                return nil
+            }
+            return environment.withUpdatedApiId(apiId)
+        }, completion: completion)
     }
     
     public let shouldKeepConnection = Promise<Bool>(false)

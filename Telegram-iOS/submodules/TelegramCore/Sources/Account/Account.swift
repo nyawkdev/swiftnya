@@ -66,7 +66,13 @@ func _internal_test(_ network: Network) -> Signal<Bool, String> {
 }
 
 public class UnauthorizedAccount {
-    public let networkArguments: NetworkInitializationArguments
+    public private(set) var networkArguments: NetworkInitializationArguments
+    
+    public func updateApiCredentials(apiId: Int32, apiHash: String, completion: (() -> Void)? = nil) {
+        self.networkArguments = self.networkArguments.withUpdatedApi(apiId: apiId, apiHash: apiHash)
+        self.network.updateApiId(apiId, completion: completion)
+    }
+    
     public let id: AccountRecordId
     public let rootPath: String
     public let basePath: String

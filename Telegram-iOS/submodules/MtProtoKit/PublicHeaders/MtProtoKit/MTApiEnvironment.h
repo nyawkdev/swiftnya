@@ -82,6 +82,7 @@
 - (MTApiEnvironment * _Nonnull)withUpdatedSocksProxySettings:(MTSocksProxySettings * _Nullable)socksProxySettings;
 - (MTApiEnvironment * _Nonnull)withUpdatedNetworkSettings:(MTNetworkSettings * _Nullable)networkSettings;
 - (MTApiEnvironment * _Nonnull)withUpdatedSystemCode:(NSData * _Nullable)systemCode;
+- (MTApiEnvironment * _Nonnull)withUpdatedApiId:(int32_t)apiId;
 
 -(id _Nonnull)initWithDeviceModelName:(NSString * _Nullable)deviceModelName;
 

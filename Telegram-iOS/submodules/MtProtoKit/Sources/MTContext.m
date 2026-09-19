@@ -1585,7 +1585,7 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     
 }
     
-- (void)updateApiEnvironment:(MTApiEnvironment *(^)(MTApiEnvironment *))f {
+- (void)updateApiEnvironment:(MTApiEnvironment *(^)(MTApiEnvironment *))f completion:(dispatch_block_t)completion {
     [[MTContext contextQueue] dispatchOnQueue:^{
         MTApiEnvironment *apiEnvironment = f(_apiEnvironment);
         if (apiEnvironment != nil) {
@@ -1602,7 +1602,14 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
                 }
             }
         }
+        if (completion != nil) {
+            completion();
+        }
     }];
+}
+
+- (void)updateApiEnvironment:(MTApiEnvironment *(^)(MTApiEnvironment *))f {
+    [self updateApiEnvironment:f completion:nil];
 }
 
 - (void)updatePeriodicTasks
