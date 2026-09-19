@@ -52,6 +52,7 @@ final class PeerInfoScreenDisclosureItem: PeerInfoScreenItem {
     let text: String
     let icon: UIImage?
     let iconSignal: Signal<UIImage?, NoError>?
+    let hasArrow: Bool
     let action: (() -> Void)?
     let longPressAction: (() -> Void)?
     
