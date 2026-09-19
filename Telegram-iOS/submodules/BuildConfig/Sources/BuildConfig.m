@@ -207,11 +207,11 @@ API_AVAILABLE(ios(10))
 }
 
 - (bool)isICloudEnabled {
-    return APP_CONFIG_IS_ICLOUD_ENABLED;
+    return false;
 }
 
 - (bool)isSiriEnabled {
-    return APP_CONFIG_IS_SIRI_ENABLED;
+    return false;
 }
 
 + (NSString * _Nullable)bundleSeedId {

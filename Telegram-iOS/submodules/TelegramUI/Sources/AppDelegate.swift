@@ -933,13 +933,17 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 }
             })
         }, requestSiriAuthorization: { completion in
-            if #available(iOS 10, *) {
-                INPreferences.requestSiriAuthorization { status in
-                    if case .authorized = status {
-                        completion(true)
-                    } else {
-                        completion(false)
+            if buildConfig.isSiriEnabled {
+                if #available(iOS 10, *) {
+                    INPreferences.requestSiriAuthorization { status in
+                        if case .authorized = status {
+                            completion(true)
+                        } else {
+                            completion(false)
+                        }
                     }
+                } else {
+                    completion(false)
                 }
             } else {
                 completion(false)
