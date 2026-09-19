@@ -178,7 +178,7 @@ public func nyagramWalletBalanceController(
                     balancesPromise.set(updated)
                 }
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         },
         save: {
             let finalBalances = balancesValue.with { $0 }
@@ -199,7 +199,7 @@ public func nyagramWalletBalanceController(
     )
     
     let signal = combineLatest(context.sharedContext.presentationData, balancesPromise.get())
-    |> map { presentationData, balances -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, balances -> (ItemListControllerState, (ItemListNodeState, NyagramWalletArguments)) in
         let entries = nyagramWalletEntries(presentationData: presentationData, balances: balances)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),

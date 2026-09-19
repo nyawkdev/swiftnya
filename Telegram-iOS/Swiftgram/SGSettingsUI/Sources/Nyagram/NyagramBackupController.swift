@@ -145,7 +145,6 @@ private func nyagramBackupEntries(presentationData: PresentationData) -> [Nyagra
 }
 
 public func nyagramBackupController(context: AccountContext) -> ViewController {
-    var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let updatedState = ValuePromise<Bool>(true, ignoreRepeated: false)
     
@@ -169,7 +168,7 @@ public func nyagramBackupController(context: AccountContext) -> ViewController {
             try? data.write(to: fileURL)
             
             let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(activityVC, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(activityVC)
         },
         restoreBackup: {
             let picker: UIDocumentPickerViewController
@@ -180,7 +179,7 @@ public func nyagramBackupController(context: AccountContext) -> ViewController {
             }
             picker.delegate = documentPickerDelegate
             picker.allowsMultipleSelection = false
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(picker, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(picker)
         },
         deleteAllData: {
             let alert = UIAlertController(
@@ -198,12 +197,12 @@ public func nyagramBackupController(context: AccountContext) -> ViewController {
                 presentControllerImpl?(OverlayStatusController(theme: presentationData.theme, type: .success), nil)
                 updatedState.set(true)
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         }
     )
     
     let signal = combineLatest(context.sharedContext.presentationData, updatedState.get())
-    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, NyagramBackupArguments)) in
         let entries = nyagramBackupEntries(presentationData: presentationData)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
@@ -221,9 +220,6 @@ public func nyagramBackupController(context: AccountContext) -> ViewController {
     }
     
     let controller = ItemListController(context: context, state: signal)
-    pushControllerImpl = { [weak controller] c in
-        (controller?.navigationController as? NavigationController)?.pushViewController(c)
-    }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }

@@ -235,8 +235,6 @@ private func nyagramBalanceEntries(presentationData: PresentationData) -> [Nyagr
 }
 
 public func nyagramBalanceController(context: AccountContext) -> ViewController {
-    var pushControllerImpl: ((ViewController) -> Void)?
-    var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let updatedState = ValuePromise<Bool>(true, ignoreRepeated: false)
     
     let arguments = NyagramBalanceArguments(
@@ -276,7 +274,7 @@ public func nyagramBalanceController(context: AccountContext) -> ViewController 
                     updatedState.set(true)
                 }
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         },
         customGram: {
             let settings = NyagramSettings.shared
@@ -297,7 +295,7 @@ public func nyagramBalanceController(context: AccountContext) -> ViewController 
                     updatedState.set(true)
                 }
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         },
         toggleSpendInMarket: { val in
             NyagramSettings.shared.spendStarsInMarket = val
@@ -314,7 +312,7 @@ public func nyagramBalanceController(context: AccountContext) -> ViewController 
     )
     
     let signal = combineLatest(context.sharedContext.presentationData, updatedState.get())
-    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, NyagramBalanceArguments)) in
         let entries = nyagramBalanceEntries(presentationData: presentationData)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
@@ -332,12 +330,6 @@ public func nyagramBalanceController(context: AccountContext) -> ViewController 
     }
     
     let controller = ItemListController(context: context, state: signal)
-    pushControllerImpl = { [weak controller] c in
-        (controller?.navigationController as? NavigationController)?.pushViewController(c)
-    }
-    presentControllerImpl = { [weak controller] c, a in
-        controller?.present(c, in: .window(.root), with: a)
-    }
     
     return controller
 }

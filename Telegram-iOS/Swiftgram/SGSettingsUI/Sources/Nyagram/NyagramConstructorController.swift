@@ -232,7 +232,6 @@ private extension Collection {
 public func nyagramConstructorController(context: AccountContext, onCreated: @escaping () -> Void) -> ViewController {
     let statePromise = ValuePromise(NyagramConstructorState(), ignoreRepeated: false)
     let stateValue = Atomic(value: NyagramConstructorState())
-    var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     
     let updateState: ((inout NyagramConstructorState) -> Void) -> Void = { f in
@@ -348,7 +347,7 @@ public func nyagramConstructorController(context: AccountContext, onCreated: @es
     )
     
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get())
-    |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, NyagramConstructorArguments)) in
         let entries = nyagramConstructorEntries(presentationData: presentationData, state: state)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
@@ -366,9 +365,6 @@ public func nyagramConstructorController(context: AccountContext, onCreated: @es
     }
     
     let controller = ItemListController(context: context, state: signal)
-    pushControllerImpl = { [weak controller] c in
-        (controller?.navigationController as? NavigationController)?.pushViewController(c)
-    }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }

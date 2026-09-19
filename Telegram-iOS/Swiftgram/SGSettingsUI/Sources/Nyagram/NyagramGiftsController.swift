@@ -103,7 +103,7 @@ private enum NyagramGiftsEntry: ItemListNodeEntry {
                 presentationData: presentationData,
                 title: "\(gift.name)",
                 label: wornLabel,
-                additionalDetail: subtitle,
+                additionalDetailLabel: subtitle,
                 sectionId: self.section,
                 style: .blocks,
                 action: {
@@ -135,7 +135,6 @@ private func nyagramGiftsEntries(presentationData: PresentationData) -> [Nyagram
 
 public func nyagramGiftsController(context: AccountContext) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
-    var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let updatedState = ValuePromise<Bool>(true, ignoreRepeated: false)
     
     let arguments = NyagramGiftsArguments(
@@ -162,7 +161,7 @@ public func nyagramGiftsController(context: AccountContext) -> ViewController {
     )
     
     let signal = combineLatest(context.sharedContext.presentationData, updatedState.get())
-    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, NyagramGiftsArguments)) in
         let entries = nyagramGiftsEntries(presentationData: presentationData)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
@@ -182,9 +181,6 @@ public func nyagramGiftsController(context: AccountContext) -> ViewController {
     let controller = ItemListController(context: context, state: signal)
     pushControllerImpl = { [weak controller] c in
         (controller?.navigationController as? NavigationController)?.pushViewController(c)
-    }
-    presentControllerImpl = { [weak controller] c, a in
-        controller?.present(c, in: .window(.root), with: a)
     }
     
     return controller

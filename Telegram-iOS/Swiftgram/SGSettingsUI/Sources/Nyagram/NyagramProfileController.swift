@@ -304,7 +304,6 @@ private func nyagramProfileEntries(presentationData: PresentationData) -> [Nyagr
 }
 
 public func nyagramProfileController(context: AccountContext) -> ViewController {
-    var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let updatedState = ValuePromise<Bool>(true, ignoreRepeated: false)
     
@@ -351,7 +350,7 @@ public func nyagramProfileController(context: AccountContext) -> ViewController 
                 }
                 updatedState.set(true)
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         },
         previewUsername: {
             if let u = NyagramSettings.shared.collectibleUsername {
@@ -402,7 +401,7 @@ public func nyagramProfileController(context: AccountContext) -> ViewController 
                 }
                 updatedState.set(true)
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         },
         previewNumber: {
             if let num = NyagramSettings.shared.collectibleNumber {
@@ -455,7 +454,7 @@ public func nyagramProfileController(context: AccountContext) -> ViewController 
                 }
                 updatedState.set(true)
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         },
         editPinnedChannel: {
             let settings = NyagramSettings.shared
@@ -482,7 +481,7 @@ public func nyagramProfileController(context: AccountContext) -> ViewController 
                 }
                 updatedState.set(true)
             }))
-            (context.sharedContext.mainWindow?.viewController as? ViewController)?.present(alert, in: .window(.root))
+            context.sharedContext.applicationBindings.presentNativeController(alert)
         },
         openPinnedChannel: {
             if let ch = NyagramSettings.shared.pinnedChannelUsername {
@@ -493,7 +492,7 @@ public func nyagramProfileController(context: AccountContext) -> ViewController 
     )
     
     let signal = combineLatest(context.sharedContext.presentationData, updatedState.get())
-    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, NyagramProfileArguments)) in
         let entries = nyagramProfileEntries(presentationData: presentationData)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
@@ -511,9 +510,6 @@ public func nyagramProfileController(context: AccountContext) -> ViewController 
     }
     
     let controller = ItemListController(context: context, state: signal)
-    pushControllerImpl = { [weak controller] c in
-        (controller?.navigationController as? NavigationController)?.pushViewController(c)
-    }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }

@@ -13,6 +13,7 @@ public func nyagramCollectibleCardModal(
     tonPrice: Double,
     date: Date
 ) -> ViewController {
+    var dismissImpl: (() -> Void)?
     let controller = AlertController(
         theme: AlertControllerTheme(presentationData: context.sharedContext.currentPresentationData.with { $0 }),
         contentNode: NyagramCardAlertContentNode(
@@ -20,9 +21,15 @@ public func nyagramCollectibleCardModal(
             title: title,
             subtitle: subtitle,
             tonPrice: tonPrice,
-            date: date
+            date: date,
+            dismiss: {
+                dismissImpl?()
+            }
         )
     )
+    dismissImpl = { [weak controller] in
+        controller?.dismiss(animated: true)
+    }
     return controller
 }
 
@@ -32,6 +39,7 @@ private final class NyagramCardAlertContentNode: AlertContentNode {
     private let subtitleText: String
     private let tonPrice: Double
     private let date: Date
+    private let dismissAction: (() -> Void)?
     
     private let containerNode: ASDisplayNode
     private let titleNode: ASTextNode
@@ -45,13 +53,15 @@ private final class NyagramCardAlertContentNode: AlertContentNode {
         title: String,
         subtitle: String,
         tonPrice: Double,
-        date: Date
+        date: Date,
+        dismiss: (() -> Void)? = nil
     ) {
         self.context = context
         self.titleText = title
         self.subtitleText = subtitle
         self.tonPrice = tonPrice
         self.date = date
+        self.dismissAction = dismiss
         
         self.containerNode = ASDisplayNode()
         self.titleNode = ASTextNode()
@@ -128,8 +138,7 @@ private final class NyagramCardAlertContentNode: AlertContentNode {
         feedback.prepare()
         feedback.impactOccurred()
         
-        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-        self.dismiss?(true)
+        self.dismissAction?()
     }
     
     override func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) -> CGSize {

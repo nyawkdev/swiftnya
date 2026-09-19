@@ -194,7 +194,7 @@ public func nyagramMainSettingsController(context: AccountContext) -> ViewContro
     )
     
     let signal = context.sharedContext.presentationData
-    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, NyagramMainArguments)) in
         let entries = nyagramMainEntries(presentationData: presentationData)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
