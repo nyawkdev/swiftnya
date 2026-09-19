@@ -165,10 +165,18 @@ API_AVAILABLE(ios(10))
 }
 
 - (int32_t)apiId {
+    int32_t customId = (int32_t)[[NSUserDefaults standardUserDefaults] integerForKey:@"custom_telegram_api_id"];
+    if (customId > 0) {
+        return customId;
+    }
     return _apiId;
 }
 
 - (NSString * _Nonnull)apiHash {
+    NSString *customHash = [[NSUserDefaults standardUserDefaults] stringForKey:@"custom_telegram_api_hash"];
+    if (customHash != nil && customHash.length > 0) {
+        return customHash;
+    }
     return _apiHash;
 }
 

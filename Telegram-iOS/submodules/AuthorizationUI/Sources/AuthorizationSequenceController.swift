@@ -41,8 +41,8 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
     private let sharedContext: SharedAccountContext
     private var account: UnauthorizedAccount
     private let otherAccountPhoneNumbers: ((String, AccountRecordId, Bool)?, [(String, AccountRecordId, Bool)])
-    private let apiId: Int32
-    private let apiHash: String
+    private var apiId: Int32
+    private var apiHash: String
     public var presentationData: PresentationData
     private let openUrl: (String) -> Void
     private let authorizationCompleted: () -> Void
@@ -69,8 +69,15 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
         self.sharedContext = sharedContext
         self.account = account
         self.otherAccountPhoneNumbers = otherAccountPhoneNumbers
-        self.apiId = apiId
-        self.apiHash = apiHash
+        let customApiId = Int32(UserDefaults.standard.integer(forKey: "custom_telegram_api_id"))
+        let customApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
+        if customApiId > 0 && !customApiHash.isEmpty {
+            self.apiId = customApiId
+            self.apiHash = customApiHash
+        } else {
+            self.apiId = apiId
+            self.apiHash = apiHash
+        }
         self.presentationData = presentationData
         self.openUrl = openUrl
         self.authorizationCompleted = authorizationCompleted
@@ -209,6 +216,12 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                 let _ = (authorizationPushConfiguration
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] authorizationPushConfiguration in
                     if let strongSelf = self {
+                        let customApiId = Int32(UserDefaults.standard.integer(forKey: "custom_telegram_api_id"))
+                        let customApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
+                        if customApiId > 0 && !customApiHash.isEmpty {
+                            strongSelf.apiId = customApiId
+                            strongSelf.apiHash = customApiHash
+                        }
                         strongSelf.actionDisposable.set((sendAuthorizationCode(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, phoneNumber: number, apiId: strongSelf.apiId, apiHash: strongSelf.apiHash, pushNotificationConfiguration: authorizationPushConfiguration, firebaseSecretStream: strongSelf.sharedContext.firebaseSecretStream, syncContacts: syncContacts, disableAuthTokens: disableAuthTokens, forcedPasswordSetupNotice: { value in
                             guard let entry = EngineCodableEntry(ApplicationSpecificCounterNotice(value: value)) else {
                                 return nil
@@ -654,6 +667,12 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     }
                 } else {
                     controller?.inProgress = true
+                    let customApiId = Int32(UserDefaults.standard.integer(forKey: "custom_telegram_api_id"))
+                    let customApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
+                    if customApiId > 0 && !customApiHash.isEmpty {
+                        strongSelf.apiId = customApiId
+                        strongSelf.apiHash = customApiHash
+                    }
                     strongSelf.actionDisposable.set((resendAuthorizationCode(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, apiId: strongSelf.apiId, apiHash: strongSelf.apiHash, firebaseSecretStream: strongSelf.sharedContext.firebaseSecretStream)
                     |> deliverOnMainQueue).startStrict(next: { result in
                         controller?.inProgress = false

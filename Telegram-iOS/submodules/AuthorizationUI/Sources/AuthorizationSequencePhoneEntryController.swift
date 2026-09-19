@@ -92,6 +92,8 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         
         if !otherAccountPhoneNumbers.1.isEmpty {
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "___close", style: .plain, target: self, action: #selector(self.cancelPressed))
+        } else {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "API", style: .plain, target: self, action: #selector(self.apiSettingsPressed))
         }
         
         if let countriesConfiguration {
@@ -341,11 +343,75 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         }
     }
     
+    @objc private func apiSettingsPressed() {
+        self.presentApiCredentialsAlert()
+    }
+    
+    private func presentApiCredentialsAlert(completion: (() -> Void)? = nil) {
+        let currentApiId = UserDefaults.standard.integer(forKey: "custom_telegram_api_id")
+        let currentApiHash = UserDefaults.standard.string(forKey: "custom_telegram_api_hash") ?? ""
+        
+        let isRussian = self.presentationData.strings.baseLanguageCode.hasPrefix("ru")
+        let title = isRussian ? "Настройка Telegram API" : "Telegram API Settings"
+        let message = isRussian ? "Введите App api_id и api_hash с сайта my.telegram.org.\nДля использования по умолчанию (ID 8) нажмите «По умолчанию»." : "Enter App api_id and api_hash from my.telegram.org.\nTo use default credentials (ID 8), tap \"Use Default\"."
+        
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        
+        alert.addTextField { textField in
+            textField.placeholder = "App api_id (например: 12345678)"
+            textField.keyboardType = .numberPad
+            if currentApiId > 0 {
+                textField.text = "\(currentApiId)"
+            }
+        }
+        
+        alert.addTextField { textField in
+            textField.placeholder = "App api_hash"
+            textField.autocapitalizationType = .none
+            textField.autocorrectionType = .no
+            if !currentApiHash.isEmpty {
+                textField.text = currentApiHash
+            }
+        }
+        
+        let saveTitle = isRussian ? "Сохранить" : "Save"
+        alert.addAction(UIAlertAction(title: saveTitle, style: .default, handler: { _ in
+            let idText = alert.textFields?[0].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let hashText = alert.textFields?[1].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            
+            if let newId = Int32(idText), newId > 0, !hashText.isEmpty {
+                UserDefaults.standard.set(Int(newId), forKey: "custom_telegram_api_id")
+                UserDefaults.standard.set(hashText, forKey: "custom_telegram_api_hash")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "custom_telegram_api_id")
+                UserDefaults.standard.removeObject(forKey: "custom_telegram_api_hash")
+            }
+            UserDefaults.standard.set(true, forKey: "custom_telegram_api_prompted")
+            UserDefaults.standard.synchronize()
+            completion?()
+        }))
+        
+        let defaultTitle = isRussian ? "По умолчанию" : "Use Default"
+        alert.addAction(UIAlertAction(title: defaultTitle, style: .cancel, handler: { _ in
+            UserDefaults.standard.set(true, forKey: "custom_telegram_api_prompted")
+            UserDefaults.standard.synchronize()
+            completion?()
+        }))
+        
+        self.present(alert, animated: true, completion: nil)
+    }
+
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
         if !self.animatingIn {
             self.controllerNode.activateInput()
+        }
+        
+        if !UserDefaults.standard.bool(forKey: "custom_telegram_api_prompted") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.presentApiCredentialsAlert()
+            }
         }
     }
     
@@ -388,6 +454,12 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         }
         let (_, _, number) = self.controllerNode.codeAndNumber
         if !number.isEmpty {
+            if !UserDefaults.standard.bool(forKey: "custom_telegram_api_prompted") {
+                self.presentApiCredentialsAlert(completion: { [weak self] in
+                    self?.nextPressed()
+                })
+                return
+            }
             let logInNumber = cleanPhoneNumber(self.controllerNode.currentNumber, removePlus: true)
             var existing: (String, AccountRecordId)?
             for (number, id, isTestingEnvironment) in self.otherAccountPhoneNumbers.1 {
