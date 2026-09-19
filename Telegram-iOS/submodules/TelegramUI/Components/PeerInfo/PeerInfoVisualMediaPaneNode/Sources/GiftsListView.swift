@@ -186,8 +186,17 @@ final class GiftsListView: UIView {
                 self.starsProducts = stateItems
                 self.pinnedReferences = Array(stateItems.filter { $0.pinnedToTop }.compactMap { $0.reference })
             } else {
-                self.starsProducts = state.filteredGifts
-                self.pinnedReferences = Array(state.gifts.filter { $0.pinnedToTop }.compactMap { $0.reference })
+                var products = state.filteredGifts
+                if self.peerId == self.context.account.peerId && UserDefaults.standard.bool(forKey: "nyagram_hide_regular_gifts") {
+                    products = products.filter { gift in
+                        if case .unique = gift.gift {
+                            return true
+                        }
+                        return false
+                    }
+                }
+                self.starsProducts = products
+                self.pinnedReferences = Array(products.filter { $0.pinnedToTop }.compactMap { $0.reference })
             }
             
             self.resultsAreEmpty = state.filter == .All && state.gifts.isEmpty && state.dataState != .loading

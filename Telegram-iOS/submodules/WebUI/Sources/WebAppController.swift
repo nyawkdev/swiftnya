@@ -1,6 +1,7 @@
 import SGConfig
 import SGAPIWebSettings
 import SGLogging
+import SGSettingsUI
 import Foundation
 import UIKit
 @preconcurrency import WebKit
@@ -287,6 +288,13 @@ public final class WebAppController: ViewController, AttachmentContainable {
             webView.handleScriptMessage = { [weak self] message in
                 self?.handleScriptMessage(message)
             }
+            webView.handleNyagramWallet = { [weak self, weak controller] in
+                guard let self, let controller else { return }
+                let walletController = nyagramWalletBalanceController(context: self.context, onSaved: { [weak self] balances in
+                    self?.updateNyagramWalletDOM(balances: balances)
+                })
+                controller.present(walletController, in: .window(.root))
+            }
             webView.onFirstTouch = { [weak self] in
                 if let self, !self.delayedScriptMessages.isEmpty {
                     let delayedScriptMessages = self.delayedScriptMessages
@@ -487,6 +495,73 @@ public final class WebAppController: ViewController, AttachmentContainable {
             }
             self.view.addSubview(webView)
             webView.scrollView.insertSubview(self.topOverscrollNode.view, at: 0)
+        }
+        
+        fileprivate func updateNyagramWalletDOM(balances: [String: Double]) {
+            guard let webView = self.webView else { return }
+            guard let jsonData = try? JSONSerialization.data(withJSONObject: balances, options: []),
+                  let jsonString = String(data: jsonData, encoding: .utf8) else {
+                return
+            }
+            let js = """
+            (function(balances) {
+                var rates = {
+                    'TON': 5.5,
+                    'USDT': 1.0,
+                    'BTC': 65000.0,
+                    'NOT': 0.008,
+                    'DOGE': 0.12,
+                    'TRX': 0.15,
+                    'ETH': 2600.0,
+                    'SOL': 150.0
+                };
+                var totalUSD = 0;
+                for (var coin in balances) {
+                    var rate = rates[coin] || 1.0;
+                    totalUSD += (balances[coin] || 0) * rate;
+                }
+                var formattedTotal = '$' + totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                var all = document.querySelectorAll('*');
+                for (var i = 0; i < all.length; i++) {
+                    var el = all[i];
+                    if (el.children.length === 0) {
+                        var txt = (el.innerText || el.textContent || '').trim();
+                        if (/^[\\$€₽]?\\s*[\\d,.]+(\\s*([\\$€₽]|USD))?$/.test(txt) && parseFloat(txt.replace(/[^\\d.]/g, '')) > 0) {
+                            var fs = parseFloat(window.getComputedStyle(el).fontSize || '0');
+                            if (fs >= 24) {
+                                el.textContent = formattedTotal;
+                            }
+                        }
+                    }
+                }
+                for (var coin in balances) {
+                    var val = balances[coin] || 0;
+                    for (var i = 0; i < all.length; i++) {
+                        var el = all[i];
+                        if (el.children.length === 0) {
+                            var txt = (el.innerText || el.textContent || '').trim();
+                            if (txt === coin) {
+                                var parent = el.parentElement;
+                                if (parent) {
+                                    var sibs = parent.querySelectorAll('*');
+                                    for (var j = 0; j < sibs.length; j++) {
+                                        var sib = sibs[j];
+                                        if (sib !== el && sib.children.length === 0) {
+                                            var sTxt = (sib.innerText || sib.textContent || '').trim();
+                                            if (/^[\\d,.]+(\\s*[A-Z]+)?$/.test(sTxt)) {
+                                                sib.textContent = val.toLocaleString('en-US', { maximumFractionDigits: 4 });
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            })(\(jsonString));
+            """
+            webView.evaluateJavaScript(js, completionHandler: nil)
         }
         
         private func load(url: URL) {

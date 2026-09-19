@@ -12,9 +12,26 @@ final class PeerInfoScreenSelectableBackgroundNode: ASDisplayNode {
     
     private var isHighlighted: Bool = false
     
+    private var longPressGestureRecognizer: UILongPressGestureRecognizer?
+    var longPressed: (() -> Void)? {
+        didSet {
+            if self.longPressed != nil {
+                if self.longPressGestureRecognizer == nil {
+                    let gesture = UILongPressGestureRecognizer(target: self, action: #selector(self.handleLongPress(_:)))
+                    gesture.minimumPressDuration = 0.5
+                    self.longPressGestureRecognizer = gesture
+                    self.button.addGestureRecognizer(gesture)
+                }
+            } else if let gesture = self.longPressGestureRecognizer {
+                self.button.removeGestureRecognizer(gesture)
+                self.longPressGestureRecognizer = nil
+            }
+        }
+    }
+    
     var pressed: (() -> Void)? {
         didSet {
-            self.button.isUserInteractionEnabled = self.pressed != nil
+            self.button.isUserInteractionEnabled = self.pressed != nil || self.longPressed != nil
         }
     }
     
@@ -41,6 +58,15 @@ final class PeerInfoScreenSelectableBackgroundNode: ASDisplayNode {
     
     @objc private func buttonPressed() {
         self.pressed?()
+    }
+    
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        if gesture.state == .began {
+            let feedback = UIImpactFeedbackGenerator(style: .medium)
+            feedback.prepare()
+            feedback.impactOccurred()
+            self.longPressed?()
+        }
     }
     
     func updateIsHighlighted(_ isHighlighted: Bool) {

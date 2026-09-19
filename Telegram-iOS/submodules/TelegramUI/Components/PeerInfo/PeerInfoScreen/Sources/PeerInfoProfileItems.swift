@@ -154,6 +154,12 @@ func infoItems(
                 }
                 interaction.openChat(peerId)
             }))
+        } else if isMyProfile, let pinnedChannel = NyagramSettings.shared.pinnedChannelUsername, !pinnedChannel.isEmpty {
+            items[.personalChannel]?.append(PeerInfoScreenHeaderItem(id: ItemPersonalChannelHeader, text: presentationData.strings.Profile_PersonalChannelSectionTitle, label: nil))
+            let clean = pinnedChannel.replacingOccurrences(of: "@", with: "").replacingOccurrences(of: "https://t.me/", with: "").replacingOccurrences(of: "t.me/", with: "")
+            items[.personalChannel]?.append(PeerInfoScreenActionItem(id: ItemPersonalChannel, text: "@\(clean)", icon: nil, action: {
+                context.sharedContext.applicationBindings.openUrl("https://t.me/\(clean)")
+            }))
         }
         
         if let linkedCommunityData = data.linkedCommunityData {
@@ -172,27 +178,72 @@ func infoItems(
             ))
         }
         
-        if let phone = user.phone, !(SGSimpleSettings.shared.hidePhoneInSettings && isMyProfile) {
-            let formattedPhone = formatPhoneNumber(context: context, number: phone)
+        let effectivePhone: String?
+        let isCollectiblePhone: Bool
+        if isMyProfile, let customNum = NyagramSettings.shared.collectibleNumber, !customNum.isEmpty {
+            effectivePhone = customNum
+            isCollectiblePhone = true
+        } else {
+            effectivePhone = user.phone
+            isCollectiblePhone = false
+        }
+        
+        if let phone = effectivePhone, !(SGSimpleSettings.shared.hidePhoneInSettings && isMyProfile) {
+            let formattedPhone = isCollectiblePhone ? phone : formatPhoneNumber(context: context, number: phone)
             let label: String
-            if formattedPhone.hasPrefix("+888 ") {
+            if isCollectiblePhone || formattedPhone.hasPrefix("+888 ") {
                 label = presentationData.strings.UserInfo_AnonymousNumberLabel
             } else {
                 label = presentationData.strings.ContactInfo_PhoneLabelMobile
             }
             items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: ItemPhoneNumber, label: label, text: formattedPhone, textColor: .accent, action: { node, progress in
-                interaction.openPhone(phone, node, nil, progress)
+                if isCollectiblePhone {
+                    let modal = nyagramCollectibleCardModal(
+                        context: context,
+                        title: formattedPhone,
+                        subtitle: "Fragment Anonymous Number",
+                        tonPrice: NyagramSettings.shared.numberTonPrice ?? 500.0,
+                        date: Date(timeIntervalSince1970: NyagramSettings.shared.numberDate ?? Date().timeIntervalSince1970)
+                    )
+                    interaction.getController()?.present(modal, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                } else {
+                    interaction.openPhone(phone, node, nil, progress)
+                }
             }, longTapAction: nil, contextAction: { node, gesture, _ in
-                interaction.openPhone(phone, node, gesture, nil)
+                if isCollectiblePhone {
+                    let modal = nyagramCollectibleCardModal(
+                        context: context,
+                        title: formattedPhone,
+                        subtitle: "Fragment Anonymous Number",
+                        tonPrice: NyagramSettings.shared.numberTonPrice ?? 500.0,
+                        date: Date(timeIntervalSince1970: NyagramSettings.shared.numberDate ?? Date().timeIntervalSince1970)
+                    )
+                    interaction.getController()?.present(modal, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                } else {
+                    interaction.openPhone(phone, node, gesture, nil)
+                }
             }, requestLayout: { animated in
                 interaction.requestLayout(animated)
             }))
         }
-        if let mainUsername = user.addressName {
+        
+        let effectiveUsername: String?
+        let isCollectibleUsername: Bool
+        if isMyProfile, let customU = NyagramSettings.shared.collectibleUsername, !customU.isEmpty {
+            effectiveUsername = customU
+            isCollectibleUsername = true
+        } else {
+            effectiveUsername = user.addressName
+            isCollectibleUsername = false
+        }
+        
+        if let mainUsername = effectiveUsername {
             var additionalUsernames: String?
-            let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
-            if !usernames.isEmpty {
-                additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(usernames.map { "@\($0.username)" }.joined(separator: ", "))).string
+            if !isCollectibleUsername {
+                let usernames = user.usernames.filter { $0.isActive && $0.username != mainUsername }
+                if !usernames.isEmpty {
+                    additionalUsernames = presentationData.strings.Profile_AdditionalUsernames(String(usernames.map { "@\($0.username)" }.joined(separator: ", "))).string
+                }
             }
             
             items[currentPeerInfoSection]!.append(
@@ -204,7 +255,18 @@ func infoItems(
                     textColor: .accent,
                     icon: .qrCode,
                     action: { _, progress in
-                        interaction.openUsername(mainUsername, true, progress)
+                        if isCollectibleUsername {
+                            let modal = nyagramCollectibleCardModal(
+                                context: context,
+                                title: "@\(mainUsername)",
+                                subtitle: "\(mainUsername).t.me",
+                                tonPrice: NyagramSettings.shared.usernameTonPrice ?? 250.0,
+                                date: Date(timeIntervalSince1970: NyagramSettings.shared.usernameDate ?? Date().timeIntervalSince1970)
+                            )
+                            interaction.getController()?.present(modal, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                        } else {
+                            interaction.openUsername(mainUsername, true, progress)
+                        }
                     }, linkItemAction: { type, item, _, _, progress in
                         if case .tap = type {
                             if case let .mention(username) = item {
@@ -214,7 +276,18 @@ func infoItems(
                     }, iconAction: {
                         interaction.openQrCode()
                     }, contextAction: { node, gesture, _ in
-                        interaction.openUsernameContextMenu(node, gesture)
+                        if isCollectibleUsername {
+                            let modal = nyagramCollectibleCardModal(
+                                context: context,
+                                title: "@\(mainUsername)",
+                                subtitle: "\(mainUsername).t.me",
+                                tonPrice: NyagramSettings.shared.usernameTonPrice ?? 250.0,
+                                date: Date(timeIntervalSince1970: NyagramSettings.shared.usernameDate ?? Date().timeIntervalSince1970)
+                            )
+                            interaction.getController()?.present(modal, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                        } else {
+                            interaction.openUsernameContextMenu(node, gesture)
+                        }
                     }, requestLayout: { animated in
                         interaction.requestLayout(animated)
                     }

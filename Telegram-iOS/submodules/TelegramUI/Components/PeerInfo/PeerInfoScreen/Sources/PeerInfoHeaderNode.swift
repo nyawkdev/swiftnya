@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramCore
+import SGSettingsUI
 import AvatarNode
 import AccountContext
 import SwiftSignalKit
@@ -993,6 +994,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             default:
                 emojiRegularStatusContent = .none
                 emojiExpandedStatusContent = .none
+            }
+            
+            if self.isMyProfile, let activeGift = NyagramSettings.shared.activeGift {
+                particleColor = UIColor.white
+                uniqueGiftSlug = "nyagram_\(activeGift.id)"
             }
             
             let iconSize = self.titleStatusIconView.update(
@@ -2044,6 +2050,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         if let cachedData = cachedData as? CachedUserData, let starRating = cachedData.starRating {
             self.currentStarRating = starRating
             self.currentPendingStarRating = cachedData.pendingStarRating
+        } else if self.isMyProfile, let level = NyagramSettings.shared.ratingLevel {
+            let pts = NyagramSettings.shared.ratingPoints ?? Int64(level * 100)
+            self.currentStarRating = TelegramStarRating(level: Int32(level), currentLevelStars: pts, stars: pts, nextLevelStars: pts + 1000)
+            self.currentPendingStarRating = nil
         } else {
             self.currentStarRating = nil
             self.currentPendingStarRating = nil

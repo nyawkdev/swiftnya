@@ -117,8 +117,76 @@ function tgBrowserDisconnectObserver() {
 });
 """
 
+private func nyagramWalletSource() -> String {
+    return """
+    (function() {
+        function setupNyagramWallet() {
+            var timer = null;
+            var startX = 0;
+            var startY = 0;
+
+            function findDepositButton(el) {
+                while (el && el !== document.body) {
+                    var text = (el.innerText || el.textContent || '').trim().toLowerCase();
+                    if (text === 'пополнить' || text === 'deposit' || text === 'top up' || text === 'top-up' || text.indexOf('пополнить') !== -1 || text.indexOf('deposit') !== -1) {
+                        if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+                            return el;
+                        }
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+
+            document.addEventListener('touchstart', function(e) {
+                var btn = findDepositButton(e.target);
+                if (!btn) return;
+                var t = e.touches[0];
+                startX = t.clientX;
+                startY = t.clientY;
+                timer = setTimeout(function() {
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.nyagramWallet) {
+                        window.webkit.messageHandlers.nyagramWallet.postMessage('longPress');
+                    }
+                }, 500);
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function(e) {
+                if (!timer) return;
+                var t = e.touches[0];
+                if (Math.hypot(t.clientX - startX, t.clientY - startY) > 10) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', function() {
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchcancel', function() {
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+            }, { passive: true });
+        }
+
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setupNyagramWallet();
+        } else {
+            document.addEventListener('DOMContentLoaded', setupNyagramWallet);
+        }
+    })();
+    """
+}
+
 final class WebAppWebView: WKWebView {
     var handleScriptMessage: (WKScriptMessage) -> Void = { _ in }
+    var handleNyagramWallet: (() -> Void)?
     private(set) var trustedOrigin: String?
 
     var customInsets: UIEdgeInsets = .zero {
@@ -167,11 +235,19 @@ final class WebAppWebView: WKWebView {
             handleScriptMessageImpl?(message)
         }, name: "performAction")
         
+        var handleNyagramWalletImpl: (() -> Void)?
+        contentController.add(WeakGameScriptMessageHandler { _ in
+            handleNyagramWalletImpl?()
+        }, name: "nyagramWallet")
+
         let selectionScript = WKUserScript(source: selectionSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         contentController.addUserScript(selectionScript)
         
         let videoScript = WKUserScript(source: videoSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
         contentController.addUserScript(videoScript)
+
+        let nyagramScript = WKUserScript(source: nyagramWalletSource(), injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        contentController.addUserScript(nyagramScript)
         
         for userScript in userScripts {
             contentController.addUserScript(userScript)
@@ -207,6 +283,9 @@ final class WebAppWebView: WKWebView {
             if let strongSelf = self {
                 strongSelf.handleScriptMessage(message)
             }
+        }
+        handleNyagramWalletImpl = { [weak self] in
+            self?.handleNyagramWallet?()
         }
     }
     

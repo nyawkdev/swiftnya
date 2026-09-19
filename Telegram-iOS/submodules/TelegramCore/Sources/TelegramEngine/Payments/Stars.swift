@@ -642,8 +642,15 @@ private final class StarsContextImpl {
     }
     
     private func updateState(_ state: StarsContext.State) {
-        self._state = state
-        self._statePromise.set(.single(state))
+        var effectiveState = state
+        if !self.ton {
+            let customStars = UserDefaults.standard.object(forKey: "nyagram_stars_balance") as? NSNumber
+            if let customStars = customStars, customStars.int64Value > 0 {
+                effectiveState = StarsContext.State(flags: state.flags, balance: StarsAmount(value: customStars.int64Value, nanos: 0), subscriptions: state.subscriptions, canLoadMoreSubscriptions: state.canLoadMoreSubscriptions, transactions: state.transactions, canLoadMoreTransactions: state.canLoadMoreTransactions, isLoading: state.isLoading)
+            }
+        }
+        self._state = effectiveState
+        self._statePromise.set(.single(effectiveState))
     }
     
     var onUpdate: Signal<Void, NoError> {
@@ -1593,6 +1600,17 @@ public final class StarsSubscriptionsContext {
 
 
 func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: BotPaymentInvoiceSource) -> Signal<SendBotPaymentResult, SendBotPaymentFormError> {
+    if UserDefaults.standard.bool(forKey: "nyagram_spend_stars_in_market") {
+        let starsBalance = (UserDefaults.standard.object(forKey: "nyagram_stars_balance") as? NSNumber)?.int64Value ?? 0
+        if starsBalance > 0 {
+            let cost: Int64 = 15
+            let remaining = max(0, starsBalance - cost)
+            UserDefaults.standard.set(NSNumber(value: remaining), forKey: "nyagram_stars_balance")
+            return .single(.done(receiptMessageId: nil, subscriptionPeerId: nil, uniqueStarGift: nil))
+        } else {
+            return .fail(.generic)
+        }
+    }
     return account.postbox.transaction { transaction -> Api.InputInvoice? in
         return _internal_parseInputInvoice(transaction: transaction, source: source)
     }

@@ -1490,6 +1490,16 @@ public enum UpgradeStarGiftError {
 }
 
 func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id, price: CurrencyAmount?) -> Signal<Never, BuyStarGiftError> {
+    if UserDefaults.standard.bool(forKey: "nyagram_spend_stars_in_market") {
+        let starsBalance = (UserDefaults.standard.object(forKey: "nyagram_stars_balance") as? NSNumber)?.int64Value ?? 0
+        let cost = price?.amount.value ?? 100
+        if starsBalance >= cost {
+            UserDefaults.standard.set(NSNumber(value: max(0, starsBalance - cost)), forKey: "nyagram_stars_balance")
+            return .complete()
+        } else {
+            return .fail(.generic)
+        }
+    }
     let source: BotPaymentInvoiceSource = .starGiftResale(slug: slug, toPeerId: peerId, ton: price?.currency == .ton)
     return _internal_fetchBotPaymentForm(accountPeerId: account.peerId, postbox: account.postbox, network: account.network, source: source, themeParams: nil)
     |> map(Optional.init)

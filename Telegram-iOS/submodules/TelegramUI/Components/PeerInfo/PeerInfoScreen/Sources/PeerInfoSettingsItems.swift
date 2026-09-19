@@ -228,6 +228,8 @@ func settingsItems(showProfileId: Bool, data: PeerInfoScreenData?, context: Acco
     }
     items[.swiftgram]!.append(PeerInfoScreenDisclosureItem(id: 1, label: swiftgramLabel, text: "Swiftgram", icon: PresentationResourcesSettings.swiftgram, action: {
         interaction.openSettings(.swiftgram)
+    }, longPressAction: {
+        interaction.openSettings(.nyagram)
     }))
 
     var appIndex = 1000
