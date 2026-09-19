@@ -23,8 +23,8 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     
     private let sharedContext: SharedAccountContext
     private var account: UnauthorizedAccount?
-    private let apiId: Int32
-    private let apiHash: String
+    private var apiId: Int32
+    private var apiHash: String
     private let isTestingEnvironment: Bool
     private let otherAccountPhoneNumbers: ((String, AccountRecordId, Bool)?, [(String, AccountRecordId, Bool)])
     private let network: Network
