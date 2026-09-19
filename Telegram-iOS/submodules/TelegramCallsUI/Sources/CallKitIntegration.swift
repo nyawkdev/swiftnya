@@ -12,6 +12,9 @@ import TelegramAudio
 import TelegramVoip
 
 private let sharedProviderDelegate: CallKitProviderDelegate? = {
+    guard CallKitIntegration.isAvailable else {
+        return nil
+    }
     return CallKitProviderDelegate()
 }()
 
@@ -90,6 +93,9 @@ public final class CallKitIntegration {
     }
     
     private func donateIntent(peerId: EnginePeer.Id, displayTitle: String, localContactId: String?) {
+        guard CallKitIntegration.isAvailable else {
+            return
+        }
         let handle = INPersonHandle(value: "tg\(peerId.id._internalGetInt64Value())", type: .unknown)
         let contact = INPerson(personHandle: handle, nameComponents: nil, displayName: displayTitle, image: nil, contactIdentifier: localContactId, customIdentifier: "tg\(peerId.id._internalGetInt64Value())")
     

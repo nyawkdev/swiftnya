@@ -235,7 +235,7 @@ public final class DeviceAccess {
                         case .notDetermined:
                             subscriber.putNext(.notDetermined)
                         @unknown default:
-                            fatalError()
+                            subscriber.putNext(.denied)
                     }
                     subscriber.putCompletion()
                     return EmptyDisposable
@@ -260,7 +260,7 @@ public final class DeviceAccess {
                     case .notDetermined:
                         subscriber.putNext(.notDetermined)
                     @unknown default:
-                        fatalError()
+                        subscriber.putNext(.denied)
                     }
                     subscriber.putCompletion()
                     return EmptyDisposable
@@ -285,7 +285,7 @@ public final class DeviceAccess {
                     case .notDetermined:
                         subscriber.putNext(.notDetermined)
                     @unknown default:
-                        fatalError()
+                        subscriber.putNext(.denied)
                     }
                     subscriber.putCompletion()
                     return EmptyDisposable
@@ -438,7 +438,7 @@ public final class DeviceAccess {
                                 case .authorized, .limited:
                                     value = true
                                 @unknown default:
-                                    fatalError()
+                                    value = false
                             }
                             let _ = cachedMediaLibraryAccessStatus.swap(value)
                             continueWithValue(value)
@@ -514,7 +514,7 @@ public final class DeviceAccess {
                                     })
                             }
                         @unknown default:
-                            fatalError()
+                            completion(false)
                 }
                 case .contacts:
                     let _ = (self.contactsPromise.get()

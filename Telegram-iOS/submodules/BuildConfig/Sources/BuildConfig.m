@@ -513,4 +513,14 @@ API_AVAILABLE(ios(10))
     });
 }
 
++ (BOOL)safeTry:(void (NS_NOESCAPE ^ _Nonnull)(void))block {
+    @try {
+        block();
+        return YES;
+    } @catch (NSException *exception) {
+        NSLog(@"[SafeGuard] Caught exception: %@: %@", exception.name, exception.reason);
+        return NO;
+    }
+}
+
 @end

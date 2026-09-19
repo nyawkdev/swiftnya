@@ -934,36 +934,40 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             })
         }, requestSiriAuthorization: { completion in
             if buildConfig.isSiriEnabled {
-                if #available(iOS 10, *) {
-                    INPreferences.requestSiriAuthorization { status in
-                        if case .authorized = status {
-                            completion(true)
-                        } else {
-                            completion(false)
+                let _ = BuildConfig.safeTry {
+                    if #available(iOS 10, *) {
+                        INPreferences.requestSiriAuthorization { status in
+                            if case .authorized = status {
+                                completion(true)
+                            } else {
+                                completion(false)
+                            }
                         }
+                    } else {
+                        completion(false)
                     }
-                } else {
-                    completion(false)
                 }
             } else {
                 completion(false)
             }
         }, siriAuthorization: {
             if buildConfig.isSiriEnabled {
-                if #available(iOS 10, *) {
-                    switch INPreferences.siriAuthorizationStatus() {
-                    case .authorized:
-                        return .allowed
-                    case .denied, .restricted:
-                        return .denied
-                    case .notDetermined:
-                        return .notDetermined
-                    @unknown default:
-                        return .notDetermined
+                var result: AccessType = .denied
+                let _ = BuildConfig.safeTry {
+                    if #available(iOS 10, *) {
+                        switch INPreferences.siriAuthorizationStatus() {
+                        case .authorized:
+                            result = .allowed
+                        case .denied, .restricted:
+                            result = .denied
+                        case .notDetermined:
+                            result = .notDetermined
+                        @unknown default:
+                            result = .notDetermined
+                        }
                     }
-                } else {
-                    return .denied
                 }
+                return result
             } else {
                 return .denied
             }
@@ -1623,38 +1627,52 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         #endif
         
         if #available(iOS 13.0, *) {
-            let cleanupTaskId = "\(baseAppBundleId).cleanup"
-            
-            BGTaskScheduler.shared.register(forTaskWithIdentifier: cleanupTaskId, using: DispatchQueue.main) { task in
-                Logger.shared.log("App \(self.episodeId)", "Executing cleanup task")
-                
-                let disposable = self.runCacheReindexTasks(lowImpact: true, completion: {
-                    Logger.shared.log("App \(self.episodeId)", "Completed cleanup task")
-                    
-                    task.setTaskCompleted(success: true)
-                })
-                
-                task.expirationHandler = {
-                    disposable.dispose()
-                    task.setTaskCompleted(success: false)
-                }
+            let permittedIdentifiers = (Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String]) ?? []
+            let cleanupTaskId: String?
+            if permittedIdentifiers.contains("\(baseAppBundleId).cleanup") {
+                cleanupTaskId = "\(baseAppBundleId).cleanup"
+            } else if let matching = permittedIdentifiers.first(where: { $0.hasSuffix(".cleanup") }) {
+                cleanupTaskId = matching
+            } else {
+                cleanupTaskId = nil
             }
             
-            BGTaskScheduler.shared.getPendingTaskRequests(completionHandler: { tasks in
-                if tasks.contains(where: { $0.identifier == cleanupTaskId }) {
-                    Logger.shared.log("App \(self.episodeId)", "Already have a cleanup task pending")
-                    return
+            if let cleanupTaskId = cleanupTaskId {
+                let _ = BuildConfig.safeTry {
+                    BGTaskScheduler.shared.register(forTaskWithIdentifier: cleanupTaskId, using: DispatchQueue.main) { task in
+                        Logger.shared.log("App \(self.episodeId)", "Executing cleanup task")
+                        
+                        let disposable = self.runCacheReindexTasks(lowImpact: true, completion: {
+                            Logger.shared.log("App \(self.episodeId)", "Completed cleanup task")
+                            
+                            task.setTaskCompleted(success: true)
+                        })
+                        
+                        task.expirationHandler = {
+                            disposable.dispose()
+                            task.setTaskCompleted(success: false)
+                        }
+                    }
+                    
+                    BGTaskScheduler.shared.getPendingTaskRequests(completionHandler: { tasks in
+                        if tasks.contains(where: { $0.identifier == cleanupTaskId }) {
+                            Logger.shared.log("App \(self.episodeId)", "Already have a cleanup task pending")
+                            return
+                        }
+                        let request = BGProcessingTaskRequest(identifier: cleanupTaskId)
+                        request.requiresExternalPower = true
+                        request.requiresNetworkConnectivity = false
+                        
+                        do {
+                            try BGTaskScheduler.shared.submit(request)
+                        } catch let e {
+                            Logger.shared.log("App \(self.episodeId)", "Error submitting background task request: \(e)")
+                        }
+                    })
                 }
-                let request = BGProcessingTaskRequest(identifier: cleanupTaskId)
-                request.requiresExternalPower = true
-                request.requiresNetworkConnectivity = false
-                
-                do {
-                    try BGTaskScheduler.shared.submit(request)
-                } catch let e {
-                    Logger.shared.log("App \(self.episodeId)", "Error submitting background task request: \(e)")
-                }
-            })
+            } else {
+                Logger.shared.log("App \(self.episodeId)", "BGTaskScheduler: cleanup task not in permitted identifiers, skipping registration")
+            }
         }
         
         let timestamp = Int(CFAbsoluteTimeGetCurrent())

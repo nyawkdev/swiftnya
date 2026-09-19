@@ -75,14 +75,14 @@
         _signalManager = [[TGBridgeSignalManager alloc] init];
         _incomingMessageQueue = [[NSMutableArray alloc] init];
         
-        self.session.delegate = self;
-        [self.session activateSession];
-        
         _replyHandlerMap = [[NSMutableDictionary alloc] init];
-        
         _appInstalled = [[SPipe alloc] init];
         
-        _activeContext = [[TGBridgeContext alloc] initWithDictionary:[self.session applicationContext]];
+        if ([WCSession isSupported]) {
+            self.session.delegate = self;
+            [self.session activateSession];
+            _activeContext = [[TGBridgeContext alloc] initWithDictionary:[self.session applicationContext]];
+        }
     }
     return  self;
 }
@@ -661,7 +661,10 @@
 
 - (WCSession *)session
 {
-    return [WCSession defaultSession];
+    if ([WCSession isSupported]) {
+        return [WCSession defaultSession];
+    }
+    return nil;
 }
 
 @end
